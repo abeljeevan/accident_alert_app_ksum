@@ -1,0 +1,56 @@
+name: accident_alert_app
+description: A new Flutter project.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.1
+
+  # ─── Core functionality ────────────────────────────────────────────────────
+  geolocator: ^14.0.1             # GPS / location
+  sensors_plus: ^6.1.1            # accelerometer, etc.
+  permission_handler: ^12.0.0+1   # runtime permissions (SMS, location)
+  shared_preferences: ^2.5.3      # persistent logs
+  flutter_tts: ^4.0.2             # text-to-speech
+  speech_to_text: ^7.0.0          # speech-to-text (offline capable)
+  intl: ^0.20.2                   # date-time formatting
+  flutter_background_service: ^5.0.6
+  flutter_background_service_android: ^6.1.2  # ✅ Required for Android
+
+  # ─── AI Crash Report Generation ────────────────────────────────────────────
+  pdf: ^3.11.1                    # PDF generation library
+  printing: ^5.14.0               # PDF generation with better support
+  path_provider: ^2.1.5           # file system paths
+  share_plus: ^10.1.3             # share reports
+  geocoding: ^3.0.0               # reverse geocoding for addresses
+
+  # ─── OSM Maps & Routing ────────────────────────────────────────────────────
+  flutter_map: ^7.0.2             # Interactive map display with OSM tiles
+  latlong2: ^0.9.1                # Latitude/longitude calculations
+
+  # ─── UI / Icons ────────────────────────────────────────────────────────────
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/logo.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
