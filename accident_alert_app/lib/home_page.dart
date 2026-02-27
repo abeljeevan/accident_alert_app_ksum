@@ -21,6 +21,9 @@ import 'osrm_routing_service.dart';
 import 'accident_map_page.dart';
 // import 'pdf_report_generator.dart'; // Temporarily disabled
 import 'crash_reports_page.dart';
+import 'edge_ai_detector.dart';
+import 'feature_extractor.dart';
+import 'explainable_ai.dart';
 
 class HomePage extends StatefulWidget {
   final bool isDarkMode;
@@ -49,6 +52,17 @@ class _HomePageState extends State<HomePage> {
   final VoiceAIHandler _voiceAI = VoiceAIHandler();
   bool _useVoiceInteraction = true; // Voice AI enabled by default
 
+  // Edge AI for Real vs Fake accident detection
+  final EdgeAIDetector _edgeAI = EdgeAIDetector();
+  bool _edgeAIEnabled = true;
+  bool _edgeAIInitialized = false;
+  // NO FALLBACK - Only Edge AI makes decisions
+
+  // Shake pattern detection (filters obvious shakes before Edge AI)
+  final List<AccelerometerEvent> _recentImpacts = [];
+  static const int _shakeWindowSize = 10; // Last 10 impacts
+  static const Duration _shakeWindowDuration = Duration(seconds: 2);
+
   Future<void> _speak(String text) async {
     await _tts.setLanguage('en-US');
     await _tts.setPitch(1.0);
@@ -63,11 +77,36 @@ class _HomePageState extends State<HomePage> {
     AccidentLogStore.load().then((_) => setState(() {}));
     CrashReportStore.load().then((_) => setState(() {}));
 
-    // 🔹 Shake detection with sensor tracking
-    accelerometerEvents.listen((AccelerometerEvent event) {
+    // Initialize Edge AI detector
+    _initializeEdgeAI();
+
+    // 🔹 Shake detection with sensor tracking + Edge AI
+    accelerometerEvents.listen((AccelerometerEvent event) async {
       double acceleration = sqrt(
         (event.x * event.x) + (event.y * event.y) + (event.z * event.z),
       );
+
+      // Feed data to Edge AI continuously (if enabled and initialized)
+      if (_edgeAIEnabled && _edgeAIInitialized) {
+        try {
+          final reading = SensorReading(
+            accX: event.x,
+            accY: event.y,
+            accZ: event.z,
+            gyroX: 0.0, // Gyroscope data would come from gyroscopeEvents
+            gyroY: 0.0,
+            gyroZ: 0.0,
+            timestamp: DateTime.now(),
+          );
+          // Add reading to buffer (doesn't trigger detection yet)
+          _edgeAI.clearBuffer(); // Clear first to avoid stale data
+          for (int i = 0; i < 15; i++) {
+            await _edgeAI.detectAccident(reading);
+          }
+        } catch (e) {
+          print('⚠️ Edge AI error: $e');
+        }
+      }
 
       if (acceleration > shakeThreshold) {
         final now = DateTime.now();
@@ -75,13 +114,241 @@ class _HomePageState extends State<HomePage> {
             now.difference(lastShakeTime!) > const Duration(seconds: 5)) {
           lastShakeTime = now;
           _impactEvent = event; // Store impact data
-          _triggerAccidentAlert(event, acceleration);
+          
+          // ✅ ONLY Edge AI makes decisions - no fallback
+          if (_edgeAIEnabled && _edgeAIInitialized) {
+            // First check if it's an obvious shake pattern
+            if (_isShakePattern(event, acceleration)) {
+              print('🚫 Shake pattern detected - ignoring without AI analysis');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '🤚 Phone shake detected (${acceleration.toStringAsFixed(1)} m/s²) - Not a crash',
+                    ),
+                    backgroundColor: Colors.blue,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+              
+              // Log as shake
+              final log = '${_now()} - Shake detected (${acceleration.toStringAsFixed(2)} m/s²), not analyzed';
+              await AccidentLogStore.add(log);
+              return; // Skip Edge AI analysis
+            }
+            
+            // Not a shake pattern - proceed with Edge AI
+            await _checkAccidentWithEdgeAI(event, acceleration);
+          } else {
+            // Edge AI not ready - ignore impact completely
+            print('⏳ Edge AI not initialized yet, ignoring impact: ${acceleration.toStringAsFixed(2)} m/s²');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '⏳ AI Loading... Impact detected (${acceleration.toStringAsFixed(1)} m/s²) but waiting for Edge AI',
+                  ),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
         }
       }
     });
 
     // Track speed continuously
     _trackSpeed();
+  }
+
+  Future<void> _initializeEdgeAI() async {
+    try {
+      print('🚀 Initializing Edge AI...');
+      await _edgeAI.initialize();
+      setState(() {
+        _edgeAIInitialized = true;
+      });
+      print('✅ Edge AI initialized successfully!');
+      
+      // Show success notification
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🤖 Edge AI Ready - Smart accident detection enabled'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Edge AI initialization failed: $e');
+      setState(() {
+        _edgeAIInitialized = false;
+        _edgeAIEnabled = false; // Disable if initialization fails
+      });
+      
+      // Show error notification
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Edge AI Failed - Accident detection DISABLED until fixed'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Detect if this is a phone shake pattern (not a real accident)
+  /// Returns true if it looks like intentional shaking
+  bool _isShakePattern(AccelerometerEvent event, double acceleration) {
+    final now = DateTime.now();
+    
+    // Clean old impacts outside the time window
+    _recentImpacts.removeWhere((oldEvent) {
+      // Store timestamp in the event somehow - using current approach
+      return _recentImpacts.length > _shakeWindowSize;
+    });
+    
+    // Add current impact
+    _recentImpacts.add(event);
+    
+    // Need at least 3 impacts to detect a pattern
+    if (_recentImpacts.length < 3) {
+      return false;
+    }
+    
+    // Shake detection: multiple impacts in rapid succession with direction changes
+    int directionChanges = 0;
+    double totalMagnitude = 0;
+    
+    for (int i = 1; i < _recentImpacts.length; i++) {
+      final prev = _recentImpacts[i - 1];
+      final curr = _recentImpacts[i];
+      
+      // Check if direction changed significantly
+      final dotProduct = (prev.x * curr.x) + (prev.y * curr.y) + (prev.z * curr.z);
+      final prevMag = sqrt(prev.x * prev.x + prev.y * prev.y + prev.z * prev.z);
+      final currMag = sqrt(curr.x * curr.x + curr.y * curr.y + curr.z * curr.z);
+      
+      if (prevMag > 0 && currMag > 0) {
+        final cosAngle = dotProduct / (prevMag * currMag);
+        
+        // Direction change (angle > 90 degrees = opposite directions)
+        if (cosAngle < 0) {
+          directionChanges++;
+        }
+      }
+      
+      totalMagnitude += currMag;
+    }
+    
+    // Shake pattern: 2+ direction changes in recent impacts
+    // AND moderate average magnitude (not extremely high like a real crash)
+    final avgMagnitude = totalMagnitude / _recentImpacts.length;
+    
+    if (directionChanges >= 2 && avgMagnitude < 60.0) {
+      print('🔍 Shake pattern detected: $directionChanges direction changes, avg ${avgMagnitude.toStringAsFixed(2)} m/s²');
+      _recentImpacts.clear(); // Clear buffer after detecting shake
+      return true;
+    }
+    
+    // Additional check: Single very high magnitude (>70) without pattern = likely real crash
+    if (acceleration > 70.0 && directionChanges < 2) {
+      print('🔍 High single impact: ${acceleration.toStringAsFixed(2)} m/s², no shake pattern');
+      return false; // Not a shake, likely real impact
+    }
+    
+    return false;
+  }
+
+  Future<void> _checkAccidentWithEdgeAI(
+    AccelerometerEvent event,
+    double acceleration,
+  ) async {
+    try {
+      // Create sensor reading
+      final reading = SensorReading(
+        accX: event.x,
+        accY: event.y,
+        accZ: event.z,
+        gyroX: 0.0, // In production, get from gyroscopeEvents
+        gyroY: 0.0,
+        gyroZ: 0.0,
+        timestamp: DateTime.now(),
+      );
+
+      // Get prediction from Edge AI
+      final result = await _edgeAI.detectAccident(reading);
+
+      print('🤖 Edge AI Prediction: ${result.prediction}');
+      print('   Confidence: ${(result.confidence * 100).toStringAsFixed(1)}%');
+      print('   Explanation: ${result.explanation}');
+
+      // Confidence threshold: Only trigger if REAL with high confidence (>75%)
+      final isHighConfidenceReal = result.isRealAccident && result.confidence > 0.75;
+
+      // Only trigger alert if it's a REAL accident with high confidence
+      if (isHighConfidenceReal) {
+        print('✅ Real accident confirmed (confidence: ${(result.confidence * 100).toStringAsFixed(1)}%) - triggering alert');
+        _triggerAccidentAlertWithAI(event, acceleration, result);
+      } else if (result.isRealAccident && result.confidence <= 0.75) {
+        // Low confidence REAL = treat as FALSE ALARM
+        print('🚫 Low confidence detection (${(result.confidence * 100).toStringAsFixed(1)}%) - treating as false alarm');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '⚠️ Impact detected but confidence too low (${(result.confidence * 100).toStringAsFixed(0)}%)\n${result.explanation}',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+
+        // Log as low confidence
+        final log = '${_now()} - Low confidence (${(result.confidence * 100).toStringAsFixed(1)}%) - not sending alert';
+        await AccidentLogStore.add(log);
+      } else {
+        print('🚫 False alarm detected - no alert sent');
+        // Show notification that false alarm was detected
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '🤖 Edge AI: False alarm detected\n${result.explanation}',
+              ),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+
+        // Log as false alarm
+        final log = '${_now()} - False alarm (Edge AI: ${(result.confidence * 100).toStringAsFixed(1)}% confidence)';
+        await AccidentLogStore.add(log);
+      }
+    } catch (e) {
+      print('❌ Edge AI prediction failed: $e');
+      // NO FALLBACK - Just log the error and notify user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Edge AI Error: $e\nImpact ignored for safety'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      
+      // Log the error
+      final log = '${_now()} - Edge AI error, impact ignored: ${acceleration.toStringAsFixed(2)} m/s²';
+      await AccidentLogStore.add(log);
+    }
   }
 
   Future<void> _trackSpeed() async {
@@ -546,10 +813,40 @@ Sent to: ${contacts.join(', ')}
     }
   }
 
+  /// Traditional accident alert (NO LONGER USED for automatic detection)
+  /// Only called manually for testing or from manual trigger button
+  /// Edge AI is the ONLY path for accelerometer-based detection
   void _triggerAccidentAlert(
     AccelerometerEvent event,
     double impactForce,
   ) async {
+    if (_useVoiceInteraction) {
+      _startVoiceInteraction(event, impactForce);
+    } else {
+      _startManualDialog(event, impactForce);
+    }
+  }
+
+  // Trigger accident alert with Edge AI result
+  void _triggerAccidentAlertWithAI(
+    AccelerometerEvent event,
+    double impactForce,
+    AccidentDetectionResult aiResult,
+  ) async {
+    // Show Edge AI analysis
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '🤖 Edge AI: Real Accident\nConfidence: ${(aiResult.confidence * 100).toStringAsFixed(1)}%',
+          ),
+          backgroundColor: Colors.deepOrange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Proceed with normal alert flow
     if (_useVoiceInteraction) {
       _startVoiceInteraction(event, impactForce);
     } else {

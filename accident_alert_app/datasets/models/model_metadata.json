@@ -1,0 +1,68 @@
+{
+  "model_type": "RandomForestClassifier",
+  "training_date": "2026-02-27 10:29:08",
+  "n_estimators": 100,
+  "max_depth": 15,
+  "features": [
+    "impact_x",
+    "impact_y",
+    "impact_z",
+    "impact_magnitude",
+    "pre_speed",
+    "post_speed",
+    "speed_change",
+    "immobility_duration",
+    "rotation_x",
+    "rotation_y",
+    "rotation_z",
+    "rotation_magnitude",
+    "impact_duration",
+    "secondary_impacts",
+    "altitude_change",
+    "gps_accuracy",
+    "time_of_day",
+    "is_moving",
+    "post_vibrations"
+  ],
+  "training_samples": 2158,
+  "test_samples": 462,
+  "metrics": {
+    "train_accuracy": 0.9935125115848007,
+    "test_accuracy": 0.7272727272727273,
+    "val_accuracy": 0.7780172413793104,
+    "precision": 0.54,
+    "recall": 0.2076923076923077,
+    "f1_score": 0.3,
+    "confusion_matrix": [
+      [
+        309,
+        23
+      ],
+      [
+        103,
+        27
+      ]
+    ]
+  },
+  "feature_importance": {
+    "post_speed": 0.07666376139120248,
+    "impact_magnitude": 0.07548503869527007,
+    "pre_speed": 0.07341463843846709,
+    "rotation_x": 0.07216805584111129,
+    "speed_change": 0.0721564225426726,
+    "impact_y": 0.07148634218192973,
+    "impact_z": 0.06956417866751738,
+    "impact_x": 0.06589492847522,
+    "gps_accuracy": 0.06302434512751692,
+    "rotation_z": 0.06072118190448683,
+    "altitude_change": 0.0597718672706988,
+    "impact_duration": 0.058652594356826675,
+    "post_vibrations": 0.055020057175960896,
+    "rotation_magnitude": 0.054363745772207615,
+    "rotation_y": 0.053769414757209234,
+    "is_moving": 0.013414308795702788,
+    "immobility_duration": 0.004429118605999537,
+    "secondary_impacts": 0.0,
+    "time_of_day": 0.0
+  }
+}

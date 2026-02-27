@@ -1,0 +1,32 @@
+{
+  "model_type": "RandomForestClassifier",
+  "n_estimators": 100,
+  "n_features": 19,
+  "n_classes": 2,
+  "feature_names": [
+    "impact_x",
+    "impact_y",
+    "impact_z",
+    "impact_magnitude",
+    "pre_speed",
+    "post_speed",
+    "speed_change",
+    "immobility_duration",
+    "rotation_x",
+    "rotation_y",
+    "rotation_z",
+    "rotation_magnitude",
+    "impact_duration",
+    "secondary_impacts",
+    "altitude_change",
+    "gps_accuracy",
+    "time_of_day",
+    "is_moving",
+    "post_vibrations"
+  ],
+  "class_names": [
+    "FAKE",
+    "REAL"
+  ],
+  "model_file": "accident_detector_rf.json"
+}

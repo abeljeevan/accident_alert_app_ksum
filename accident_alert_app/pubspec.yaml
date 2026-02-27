@@ -47,6 +47,10 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/models/accident_detector_rf.json
+    - assets/models/model_summary.json
+    - assets/models/feature_importance.csv
+    - assets/datasets/combined_dataset.csv
 
 flutter_launcher_icons:
   android: true
