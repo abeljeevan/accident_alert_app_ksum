@@ -7,4 +7,5 @@ Thumbs.db
 # Build outputs
 **/android/build/
 **/build/
+/.gradle-transforms-cache/
 .dart_tool/
