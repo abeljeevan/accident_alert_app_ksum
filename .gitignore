@@ -1,0 +1,10 @@
+# System & temporary files
+device-list.txt
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Build outputs
+**/android/build/
+**/build/
+.dart_tool/

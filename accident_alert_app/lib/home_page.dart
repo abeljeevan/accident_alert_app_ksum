@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'app_ui_components.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,13 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const MethodChannel _smsChannel = MethodChannel('accident/sms');
   static const double shakeThreshold = 40.0;
+  static const Color _red = Color(0xFFFF3347);
+
+  void _openScreen(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+
+  void _showScreen(String title, Widget child) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: Text(title)), body: SafeArea(child: child))));
+  }
   DateTime? lastShakeTime;
 
   // Sensor data tracking for crash report
@@ -62,6 +70,8 @@ class _HomePageState extends State<HomePage> {
   final List<AccelerometerEvent> _recentImpacts = [];
   static const int _shakeWindowSize = 10; // Last 10 impacts
   static const Duration _shakeWindowDuration = Duration(seconds: 2);
+
+
 
   Future<void> _speak(String text) async {
     await _tts.setLanguage('en-US');
@@ -124,7 +134,7 @@ class _HomePageState extends State<HomePage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      '🤚 Phone shake detected (${acceleration.toStringAsFixed(1)} m/s²) - Not a crash',
+                      '🤚 Explainable AI: Phone shake detected (${acceleration.toStringAsFixed(1)} m/s²) - Not a crash',
                     ),
                     backgroundColor: Colors.blue,
                     duration: const Duration(seconds: 2),
@@ -176,7 +186,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🤖 Edge AI Ready - Smart accident detection enabled'),
+            content: Text('🤖 Explainable AI Ready - Smart accident detection enabled'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
@@ -193,7 +203,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('❌ Edge AI Failed - Accident detection DISABLED until fixed'),
+            content: Text('❌ Explainable AI Failed - Accident detection DISABLED until fixed'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 5),
           ),
@@ -302,7 +312,7 @@ class _HomePageState extends State<HomePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '⚠️ Impact detected but confidence too low (${(result.confidence * 100).toStringAsFixed(0)}%)\n${result.explanation}',
+                '⚠️ Explainable AI: Impact detected but confidence too low (${(result.confidence * 100).toStringAsFixed(0)}%)\n${result.explanation}',
               ),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 3),
@@ -320,7 +330,7 @@ class _HomePageState extends State<HomePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '🤖 Edge AI: False alarm detected\n${result.explanation}',
+                '🤖 Explainable AI: False alarm detected\n${result.explanation}',
               ),
               backgroundColor: Colors.blue,
               duration: const Duration(seconds: 4),
@@ -338,7 +348,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Edge AI Error: $e\nImpact ignored for safety'),
+            content: Text('❌ Explainable AI Error: $e\nImpact ignored for safety'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
@@ -833,12 +843,12 @@ Sent to: ${contacts.join(', ')}
     double impactForce,
     AccidentDetectionResult aiResult,
   ) async {
-    // Show Edge AI analysis
+    // Show Explainable AI analysis
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '🤖 Edge AI: Real Accident\nConfidence: ${(aiResult.confidence * 100).toStringAsFixed(1)}%',
+            '🤖 Explainable AI: Real Accident\nConfidence: ${(aiResult.confidence * 100).toStringAsFixed(1)}%',
           ),
           backgroundColor: Colors.deepOrange,
           duration: const Duration(seconds: 2),
@@ -1044,6 +1054,25 @@ Sent to: ${contacts.join(', ')}
     );
   }
 
+  void _showNearbyHospitalsPage() {
+    _showScreen('Nearby Hospitals', NearbyHospitalsView(isDarkMode: widget.isDarkMode, onNavigate: (name) async {
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final hospitals = await HospitalService.fetchNearbyHospitals(pos.latitude, pos.longitude);
+      final hospital = hospitals.firstWhere((h) => h['name'] == name, orElse: () => <String, dynamic>{});
+      if (hospital.isEmpty) return;
+      final lat = double.parse(hospital['lat'].toString());
+      final lon = double.parse(hospital['lon'].toString());
+      final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      final address = placemarks.isEmpty ? '${pos.latitude}, ${pos.longitude}' : '${placemarks.first.locality ?? ''}, ${placemarks.first.country ?? ''}';
+      if (!mounted) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => AccidentMapPage(accidentLat: pos.latitude, accidentLon: pos.longitude, hospitalName: name, hospitalLat: lat, hospitalLon: lon, address: address, severity: 'Minor', isDarkMode: widget.isDarkMode)));
+    }, onLoad: () async {
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final hospitals = await HospitalService.fetchNearbyHospitals(pos.latitude, pos.longitude);
+      return hospitals.map<(String, double)>((h) => (h['name'] ?? 'Unknown', Geolocator.distanceBetween(pos.latitude, pos.longitude, double.parse(h['lat'].toString()), double.parse(h['lon'].toString())) / 1000)).toList();
+    }));
+  }
+
   Future<void> _showNearbyHospitals() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -1116,139 +1145,41 @@ Sent to: ${contacts.join(', ')}
     }
   }
 
+  void _showDetector() {
+    _openScreen(const AccidentDetector());
+  }
+
   @override
   Widget build(BuildContext context) {
+    final dark = widget.isDarkMode;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Accident Alert App'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(
-              _useVoiceInteraction ? Icons.mic : Icons.mic_off,
-              color: _useVoiceInteraction ? Colors.green : Colors.red,
-            ),
-            tooltip: _useVoiceInteraction
-                ? "Voice AI: ON (tap to disable)"
-                : "Voice AI: OFF (tap to enable)",
-            onPressed: () {
-              setState(() {
-                _useVoiceInteraction = !_useVoiceInteraction;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    _useVoiceInteraction
-                        ? '🎤 Voice AI enabled'
-                        : '🔇 Voice AI disabled',
-                  ),
-                  duration: const Duration(seconds: 1),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(widget.isDarkMode ? Icons.dark_mode : Icons.light_mode),
-            tooltip: widget.isDarkMode
-                ? "Switch to Light Mode"
-                : "Switch to Dark Mode",
-            onPressed: widget.onToggleTheme,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              Image.asset('assets/images/logo.png', height: 300, width: 300),
-              const SizedBox(height: 10),
-
-              ElevatedButton.icon(
-                icon: const Icon(Icons.sensors),
-                label: const Text('Start Detection'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AccidentDetector()),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.warning),
-                label: const Text('Send Alert'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                onPressed: () => _sendAlertWithLocation(context),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.list),
-                label: const Text('View Logs'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => LogPage(
-                      isDarkMode:
-                          widget.isDarkMode, // Pass the dark mode to LogPage
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.contacts),
-                label: const Text('Emergency Contacts'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ManageContactsPage(
-                      isDarkMode: widget.isDarkMode, // Pass dark mode here
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.local_hospital),
-                label: const Text('Nearby Hospitals'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                onPressed: _showNearbyHospitals,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.description),
-                label: const Text('📝 Crash Reports (AI)'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  backgroundColor: widget.isDarkMode
-                      ? const Color(0xFF2C5F2D)
-                      : const Color(0xFF4CAF50),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        CrashReportsPage(isDarkMode: widget.isDarkMode),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Accident Alert App'), actions: [
+        IconButton(icon: Icon(_useVoiceInteraction ? Icons.mic : Icons.mic_off, color: _useVoiceInteraction ? const Color(0xFF19B67A) : _red), tooltip: _useVoiceInteraction ? 'Voice AI: ON (tap to disable)' : 'Voice AI: OFF (tap to enable)', onPressed: () { setState(() => _useVoiceInteraction = !_useVoiceInteraction); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_useVoiceInteraction ? '🎤 Voice AI enabled' : '🔇 Voice AI disabled'), duration: const Duration(seconds: 1))); }),
+        IconButton(icon: Icon(dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded), tooltip: dark ? 'Switch to Light Mode' : 'Switch to Dark Mode', onPressed: widget.onToggleTheme),
+      ]),
+      body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(20, 2, 20, 20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Stay Safe • Detect • Alert • Get Help', style: Theme.of(context).textTheme.bodySmall?.copyWith(letterSpacing: .35)),
+        const SizedBox(height: 14),
+        ClipRRect(borderRadius: BorderRadius.circular(24), child: Stack(alignment: Alignment.bottomLeft, children: [
+          SizedBox(width: double.infinity, height: 205, child: Image.asset('assets/images/logo.png', fit: BoxFit.cover)),
+          Container(height: 82, decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withValues(alpha: .68)]))),
+          const Padding(padding: EdgeInsets.all(16), child: Row(children: [Icon(Icons.health_and_safety, color: Colors.white), SizedBox(width: 9), Text('Your safety comes first', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16))]))
+        ])),
+        const SizedBox(height: 16),
+        HomeAction(icon: Icons.play_arrow_rounded, title: 'Start Detection', subtitle: 'Monitor sensors for an accident', prominent: true, onTap: _showDetector),
+        const SizedBox(height: 10),
+        HomeAction(icon: Icons.warning_rounded, title: 'Send Alert', subtitle: 'Notify your emergency contacts', onTap: () => _sendAlertWithLocation(context)),
+        const SizedBox(height: 10),
+        HomeAction(icon: Icons.receipt_long_rounded, title: 'View Logs', subtitle: 'Review recent alert activity', onTap: () => _showScreen('Accident Logs', LogPage(isDarkMode: dark))),
+        const SizedBox(height: 10),
+        HomeAction(icon: Icons.contacts_rounded, title: 'Emergency Contacts', subtitle: '${EmergencyContactsStore.contacts.length} saved contacts', onTap: () => _showScreen('Emergency Contacts', ManageContactsPage(isDarkMode: dark))),
+        const SizedBox(height: 10),
+        HomeAction(icon: Icons.local_hospital_rounded, title: 'Nearby Hospitals', subtitle: 'Find medical help nearby', onTap: _showNearbyHospitalsPage),
+        const SizedBox(height: 10),
+        HomeAction(icon: Icons.description_rounded, title: 'Crash Reports (AI)', subtitle: '${CrashReportStore.reports.length} saved reports', onTap: () => _showScreen('AI Crash Reports', CrashReportsPage(isDarkMode: dark))),
+        const SizedBox(height: 14),
+        Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: dark ? const Color(0xFF102F4E) : const Color(0xFFE3F1FF), borderRadius: BorderRadius.circular(18)), child: Row(children: [const Icon(Icons.shield_rounded, color: Color(0xFF2588F5), size: 29), const SizedBox(width: 12), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Drive Safe', style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface)), Text('We are with you', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))])]))
+      ]))),
     );
   }
 }

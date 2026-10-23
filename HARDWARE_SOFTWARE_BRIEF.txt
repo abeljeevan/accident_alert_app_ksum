@@ -1,0 +1,101 @@
+================================================================================
+HARDWARE & SOFTWARE REQUIREMENTS - ACCIDENT ALERT APP
+================================================================================
+
+DEVELOPER SETUP
+================================================================================
+OS: Windows 10 Pro / macOS 11+ / Ubuntu 20.04 LTS
+Processor: Intel i5 (min) / i7-10th Gen+ (rec)
+RAM: 8 GB (min) / 16-32 GB (rec)
+Storage: 256 GB SSD (min) / 1 TB (rec)
+IDE: VS Code 1.75+ / Android Studio 4.2+ / Xcode 13+
+SDK: Flutter 3.10+, Dart 3.8+, Android API 21-33, iOS 12.0+
+
+================================================================================
+END-USER DEVICE SPECS
+================================================================================
+
+ANDROID
+  Min: Android 5.0+, 2 GB RAM, 100 MB storage, ARM v7/64
+  Rec: Android 10+, 4 GB RAM, Snapdragon 765+, 4000+ mAh, 4G LTE
+
+iOS
+  Min: iOS 12.0+, Apple A9+, 2 GB RAM, 100 MB storage
+  Rec: iOS 15+, A12+, 4 GB RAM, 3500+ mAh, dual-freq GPS
+
+WEB: Chrome 90+, Firefox 88+, Safari 14+, 1024px+ display
+
+================================================================================
+SENSORS REQUIRED
+================================================================================
+Accelerometer (3-axis, 100 Hz sampling)
+Gyroscope (3-axis, ±2000°/s)
+GPS/GNSS (1 Hz, ±5-10m accuracy)
+Microphone (voice AI)
+
+================================================================================
+NETWORK & CONNECTIVITY
+================================================================================
+Mobile: 2G/3G (SMS), 4G LTE (recommended), 5G (optional)
+GPS: Warm start 2-10s, cold start 30-60s
+Wi-Fi: Optional for APIs (1+ Mbps)
+Offline Mode: Core detection works without internet
+
+================================================================================
+THIRD-PARTY SERVICES
+================================================================================
+Overpass API (Hospital finder) - Free, 10 req/min
+OSRM (Route optimization) - Free, open-source
+SMS Gateway - Native Android/iOS API
+Firebase (optional) - Free tier 50k events/day
+
+================================================================================
+PERFORMANCE TARGETS
+================================================================================
+Memory: <50 MB launch, <200 MB peak
+CPU: <2% idle, <40% during detection
+Battery: <15% daily drain
+ML Inference: <50ms, 72.73% accuracy, 8% false positives
+SMS Delivery: <10s, Success rate 100%
+API Response: Overpass <2s, OSRM <1s
+
+================================================================================
+PERMISSIONS REQUIRED
+================================================================================
+
+Android:
+  android.permission.SENSOR
+  android.permission.ACCESS_FINE_LOCATION
+  android.permission.SEND_SMS
+  android.permission.RECORD_AUDIO
+  android.permission.INTERNET
+
+iOS:
+  NSLocationWhenInUseUsageDescription
+  NSMicrophoneUsageDescription
+  NSContactsUsageDescription
+  NSMotionUsageDescription
+
+================================================================================
+COMPATIBILITY MATRIX
+================================================================================
+Platform    Min Version         Target Version       Max Version
+─────────────────────────────────────────────────────────────────
+Android     5.0 (API 21)        13 (API 33)          API 34+
+iOS         12.0                14.0+                iOS 17+
+Web         Chrome 90+          Latest               All modern
+Windows     10 Pro              11 Pro               Latest+1
+macOS       10.15               12+                  Latest
+Linux       Ubuntu 18.04 LTS    22.04 LTS            Latest
+
+================================================================================
+MODEL & STORAGE
+================================================================================
+App Size: ~50 MB (release APK)
+ML Model: 14.74 MB (Random Forest, 100 trees, 19 features)
+Training Data: 3,084 samples (1,542 crashes, 1,542 non-crashes)
+Logs/Data: <100 MB with 1-year history
+
+================================================================================
+Version 1.0 | March 25, 2026 | Production-Ready
+================================================================================

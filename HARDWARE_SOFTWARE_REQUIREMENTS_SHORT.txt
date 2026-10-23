@@ -1,0 +1,202 @@
+================================================================================
+ACCIDENT ALERT APP - HARDWARE & SOFTWARE REQUIREMENTS
+================================================================================
+
+DEVELOPMENT REQUIREMENTS
+================================================================================
+
+Minimum Developer Hardware:
+  • Processor: Intel Core i5 (8th Gen+) or AMD Ryzen 5 2600, 3.0+ GHz
+  • RAM: 8 GB minimum (12-16 GB recommended)
+  • Storage: 256 GB SSD (512 GB recommended)
+  • Display: 1920×1080 (Full HD)
+  • USB 3.0 ports: 2+ for device debugging
+
+Recommended Developer Hardware:
+  • Processor: Intel Core i7 (10th Gen+) or AMD Ryzen 7
+  • RAM: 16-32 GB DDR4
+  • Storage: 1 TB NVMe SSD
+  • Display: Dual 2560×1440 or single 4K
+  • GPU: Discrete GPU optional (acceleration benefits)
+
+Development Software:
+  • OS: Windows 10 Pro / macOS 11+ / Ubuntu 20.04 LTS
+  • Flutter SDK: 3.10+
+  • Dart: 3.8+ (bundled with Flutter)
+  • IDE: Visual Studio Code 1.75+ (recommended)
+  • Alternatives: Android Studio 4.2+ or IntelliJ IDEA 2022.1+
+
+Platform Tools:
+  • Android SDK: API 21-33
+  • Android Emulator: API 31-33 images
+  • Xcode: 13+ (for iOS development)
+  • iOS SDK: iOS 12.0+ target
+  • Git: 2.30+
+  • Python 3.8+ (for ML model handling)
+
+================================================================================
+END-USER REQUIREMENTS
+================================================================================
+
+ANDROID DEVICES
+
+Minimum Specs:
+  • OS: Android 5.0+ (API 21)
+  • Processor: ARM v7 or ARM64, 1.0+ GHz
+  • RAM: 2 GB
+  • Storage: 100 MB free space
+  • Sensors: Accelerometer (3-axis), Gyroscope (3-axis)
+  • GPS: Standard GPS, A-GPS capable
+  • Battery: 2500 mAh minimum
+
+Recommended Specs:
+  • OS: Android 10+ (Android 12+ preferred)
+  • Processor: Snapdragon 765 or higher
+  • RAM: 4 GB+
+  • Storage: 200+ MB free
+  • Sensors: Accelerometer, Gyroscope, Magnetometer, Proximity
+  • GPS: Multi-system (GPS + GLONASS + Galileo + BeiDou)
+  • Network: 4G LTE or 5G
+  • Battery: 4000 mAh+
+  • Examples: Pixel 5+, Samsung Galaxy S20+, OnePlus 8+
+
+iOS DEVICES
+
+Minimum Specs:
+  • OS: iOS 12.0+
+  • Processor: Apple A9 or later (iPhone 6s+)
+  • RAM: 2 GB
+  • Storage: 100 MB free space
+  • GPS: Standard GPS
+
+Recommended Specs:
+  • OS: iOS 15+
+  • Processor: Apple A12 Bionic or newer (iPhone XS+)
+  • RAM: 4 GB+
+  • Storage: 200+ MB free
+  • GPS: Dual-frequency GPS
+  • Network: 4G LTE or 5G
+  • Battery: 3500 mAh+
+  • Examples: iPhone 12 Pro+, iPhone 13+, iPhone 14+
+
+WEB DEPLOYMENT
+  • Browser: Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
+  • Screen Resolution: 320px minimum (1024px+ recommended)
+  • Internet: Broadband 5+ Mbps
+
+================================================================================
+NETWORK & CONNECTIVITY
+================================================================================
+
+Mobile Network:
+  • Minimum: 2G/3G connectivity (for SMS)
+  • Recommended: 4G LTE
+  • Optional: 5G capable
+  • Offline Mode: Core accident detection works without internet
+
+GPS/GNSS:
+  • Acquisition: Active GPS receiver required
+  • Warm Start: 2-10 seconds
+  • Cold Start: 30-60 seconds
+  • Accuracy: ±5-10 meters
+
+Internet Connection:
+  • Optional Wi-Fi: For API calls (Overpass/OSRM)
+  • Bandwidth: 1+ Mbps sufficient
+  • Data Usage: ~50 KB per alert, <50 MB per day
+
+================================================================================
+THIRD-PARTY SERVICES
+================================================================================
+
+Overpass API (Hospital Finder):
+  • Provider: OpenStreetMap Foundation
+  • Cost: Free (open-source)
+  • Rate Limit: 10 requests/minute per IP
+  • Fallback: Offline cached hospital database included
+
+OSRM (Route Optimization):
+  • Provider: Open Source Routing Machine
+  • Cost: Free (open-source)
+  • Rate Limit: Depends on deployment
+  • Fallback: Direct distance calculation
+
+SMS Gateway:
+  • Provider: Native Android/iOS API
+  • Cost: Per SMS (carrier dependent)
+  • No API key required
+
+Optional - Firebase:
+  • Authentication, Crashlytics, Analytics
+  • Free tier: 50,000 events/day
+
+================================================================================
+PERFORMANCE TARGETS
+================================================================================
+
+Application Performance:
+  • Memory: <50 MB on launch, <200 MB peak
+  • CPU: <2% idle, <40% during detection
+  • Battery: <15% daily drain under monitoring
+  • Storage: App ~50 MB, Logs <100 MB, Model 14.74 MB
+
+ML Model Performance:
+  • Inference Time: <50ms on mobile hardware
+  • Detection Latency: <100ms target
+  • Accuracy: 72.73% on test set
+  • False Positive Rate: 8%
+
+Network Performance:
+  • Overpass API: <2 seconds response
+  • OSRM Routing: <1 second response
+  • SMS Delivery: <10 seconds
+  • Data per Alert: ~50 KB
+
+================================================================================
+REQUIRED ANDROID PERMISSIONS
+================================================================================
+
+<uses-permission android:name="android.permission.SENSOR" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.SEND_SMS" />
+<uses-permission android:name="android.permission.READ_CONTACTS" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+================================================================================
+REQUIRED iOS PERMISSIONS
+================================================================================
+
+NSLocationWhenInUseUsageDescription → GPS location access
+NSMicrophoneUsageDescription → Audio recording (voice AI)
+NSContactsUsageDescription → Emergency contact access
+NSMotionUsageDescription → Accelerometer/Gyroscope access
+
+================================================================================
+COMPATIBILITY MATRIX
+================================================================================
+
+Platform           Minimum Version     Target Version      Latest Support
+─────────────────────────────────────────────────────────────────────────────
+Android            5.0 (API 21)        13 (API 33)         API 34+
+iOS                12.0                14.0+               iOS 17+
+Web                Chrome 90+          Chrome Latest       All modern browsers
+Windows            10 Pro              11 Pro              Latest + 1
+macOS              10.15               12+                 Latest
+Linux              Ubuntu 18.04 LTS    Ubuntu 22.04 LTS    Latest LTS
+
+================================================================================
+VERSION INFORMATION
+================================================================================
+
+Document Version: 1.0
+Last Updated: March 25, 2026
+Status: Production-Ready
+Compiled By: Development Team
+
+For detailed specifications, refer to HARDWARE_SOFTWARE_REQUIREMENTS.md
+or HARDWARE_SOFTWARE_REQUIREMENTS.docx
+
+================================================================================

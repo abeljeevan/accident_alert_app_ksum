@@ -12,6 +12,10 @@ class ManageContactsPage extends StatefulWidget {
 
 class _ManageContactsPageState extends State<ManageContactsPage> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() { _controller.dispose(); _search.dispose(); super.dispose(); }
 
   void _addContact() async {
     final number = _controller.text.trim();
@@ -35,10 +39,10 @@ class _ManageContactsPageState extends State<ManageContactsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final contacts = EmergencyContactsStore.contacts;
+    final contacts = EmergencyContactsStore.contacts.where((n) => n.toLowerCase().contains(_search.text.trim().toLowerCase())).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Emergency Contacts')),
+      appBar: AppBar(title: const Text('Emergency Contacts'), actions: [IconButton(tooltip: 'Contact options', onPressed: () {}, icon: const Icon(Icons.person_outline_rounded)), IconButton(tooltip: 'Add contact', onPressed: _addContact, icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFFFF3347)))]),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -49,15 +53,10 @@ class _ManageContactsPageState extends State<ManageContactsPage> {
                   child: TextField(
                     controller: _controller,
                     keyboardType: TextInputType.phone,
-                    style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Enter phone number',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      border: const OutlineInputBorder(),
-                      filled: true,
-                      fillColor: widget.isDarkMode
-                          ? const Color(0xFF2C2C2C) // dark mode
-                          : const Color(0xFF194276), // dark blue light mode
+                      hintText: 'Enter phone number',
+                      prefixIcon: const Icon(Icons.phone_android_rounded),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                     ),
                   ),
                 ),
@@ -69,13 +68,15 @@ class _ManageContactsPageState extends State<ManageContactsPage> {
               ],
             ),
             const SizedBox(height: 20),
+            TextField(controller: _search, onChanged: (_) => setState(() {}), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search contacts...')),
+            const SizedBox(height: 12),
             Expanded(
               child: contacts.isEmpty
                   ? Center(
                       child: Text(
                         'No contacts added yet.',
                         style: TextStyle(
-                          color: widget.isDarkMode ? Colors.white : Colors.black,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     )
@@ -84,19 +85,20 @@ class _ManageContactsPageState extends State<ManageContactsPage> {
                       itemBuilder: (context, index) {
                         final number = contacts[index];
                         return Card(
-                          color: widget.isDarkMode
-                              ? const Color(0xFF2C2C2C)
-                              : const Color(0xFF194276),
+                          color: Theme.of(context).cardColor,
                           child: ListTile(
                             title: Text(
                               number,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(fontWeight: FontWeight.w700),
                             ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete,
-                                  color: Color.fromARGB(255, 160, 15, 4)),
+                            subtitle: const Text('Emergency contact'),
+                            leading: CircleAvatar(backgroundColor: const Color(0xFFFF3347).withValues(alpha: .12), foregroundColor: const Color(0xFFFF3347), child: Text(number.isEmpty ? '?' : number.substring(0, 1))),
+                            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(tooltip: 'Call contact', icon: const Icon(Icons.call_rounded, color: Color(0xFFFF3347)), onPressed: () {}),
+                              IconButton(
+                              tooltip: 'Remove contact', icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF3347)),
                               onPressed: () => _removeContact(number),
-                            ),
+                            )]),
                           ),
                         );
                       },

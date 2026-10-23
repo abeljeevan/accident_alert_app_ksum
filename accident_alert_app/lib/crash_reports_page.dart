@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'crash_report.dart';
 // import 'pdf_report_generator.dart'; // Temporarily disabled
 import 'ai_severity_analyzer.dart';
+import 'app_ui_components.dart';
 
 class CrashReportsPage extends StatefulWidget {
   final bool isDarkMode;
@@ -17,6 +18,7 @@ class CrashReportsPage extends StatefulWidget {
 
 class _CrashReportsPageState extends State<CrashReportsPage> {
   bool _isGenerating = false;
+  String _filter = 'All';
 
   Future<void> _generateAndViewPDF(CrashReport report) async {
     // PDF generation temporarily disabled - coming soon!
@@ -59,7 +61,7 @@ class _CrashReportsPageState extends State<CrashReportsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final reports = CrashReportStore.reports;
+    final reports = _filter == 'All' ? CrashReportStore.reports : CrashReportStore.reports.where((r) => r.severity.toLowerCase() == _filter.toLowerCase()).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -111,7 +113,9 @@ class _CrashReportsPageState extends State<CrashReportsPage> {
                 ],
               ),
             )
-          : reports.isEmpty
+          : Column(children: [
+          if (CrashReportStore.reports.isNotEmpty) SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: Row(children: ['All', 'Critical', 'Severe', 'Moderate', 'Minor'].map((f) => Padding(padding: const EdgeInsets.only(right: 7), child: ChoiceChip(label: Text(f), selected: _filter == f, onSelected: (_) => setState(() => _filter = f)))).toList())),
+          Expanded(child: reports.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -146,13 +150,13 @@ class _CrashReportsPageState extends State<CrashReportsPage> {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
               itemCount: reports.length,
               itemBuilder: (context, index) {
                 final report = reports[index];
                 return _buildReportCard(report);
               },
-            ),
+            ))]),
     );
   }
 
@@ -161,9 +165,7 @@ class _CrashReportsPageState extends State<CrashReportsPage> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: widget.isDarkMode
-          ? const Color(0xFF2C2C2C)
-          : const Color(0xFF194276),
+      color: Theme.of(context).cardColor,
       child: InkWell(
         onTap: () => _viewReportDetails(report),
         child: Padding(
@@ -211,15 +213,11 @@ class _CrashReportsPageState extends State<CrashReportsPage> {
               // Date and time
               Row(
                 children: [
-                  const Icon(
-                    Icons.access_time,
-                    size: 16,
-                    color: Colors.white70,
-                  ),
+                  Icon(Icons.access_time, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     DateFormat('dd MMM yyyy, hh:mm a').format(report.dateTime),
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                   ),
                 ],
               ),
@@ -229,11 +227,7 @@ class _CrashReportsPageState extends State<CrashReportsPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: Colors.white70,
-                  ),
+                    Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
