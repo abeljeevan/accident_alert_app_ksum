@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'app_ui_components.dart';
@@ -25,6 +26,8 @@ import 'crash_reports_page.dart';
 import 'edge_ai_detector.dart';
 import 'feature_extractor.dart';
 import 'explainable_ai.dart';
+import 'emergency_corridor_service.dart';
+import 'emergency_corridor_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isDarkMode;
@@ -460,6 +463,7 @@ $hospitalInfo$routingSection
   Future<void> _sendAlertWithLocation(BuildContext context) async {
     try {
       final pos = await _getCurrentPosition();
+      unawaited(EmergencyCorridorService.createIncident(latitude: pos.latitude, longitude: pos.longitude, occurredAt: DateTime.now()));
 
       if (!await _ensureSmsPermission()) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -634,6 +638,7 @@ Sent to: ${contacts.join(', ')}
         ),
       );
       setState(() {});
+      if (mounted) _openScreen(EmergencyCorridorPage(latitude: pos.latitude, longitude: pos.longitude, isDarkMode: widget.isDarkMode));
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -648,6 +653,7 @@ Sent to: ${contacts.join(', ')}
   ) async {
     try {
       final pos = await _getCurrentPosition();
+      unawaited(EmergencyCorridorService.createIncident(latitude: pos.latitude, longitude: pos.longitude, occurredAt: DateTime.now(), severity: 'Accident'));
 
       // Get address from coordinates
       String address = 'Address unavailable';
@@ -857,6 +863,7 @@ Sent to: ${contacts.join(', ')}
       );
 
       setState(() {});
+      if (mounted) _openScreen(EmergencyCorridorPage(latitude: pos.latitude, longitude: pos.longitude, isDarkMode: widget.isDarkMode));
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -1187,6 +1194,16 @@ Sent to: ${contacts.join(', ')}
     _openScreen(const AccidentDetector());
   }
 
+  Future<void> _openEmergencyCorridor() async {
+    try {
+      final pos = await _getCurrentPosition();
+      if (!mounted) return;
+      _openScreen(EmergencyCorridorPage(latitude: pos.latitude, longitude: pos.longitude, isDarkMode: widget.isDarkMode));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not get GPS location: $error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dark = widget.isDarkMode;
@@ -1216,7 +1233,7 @@ Sent to: ${contacts.join(', ')}
         const SizedBox(height: 10),
         HomeAction(icon: Icons.description_rounded, title: 'Crash Reports (AI)', subtitle: '${CrashReportStore.reports.length} saved reports', onTap: () => _showScreen('AI Crash Reports', CrashReportsPage(isDarkMode: dark))),
         const SizedBox(height: 14),
-        Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: dark ? const Color(0xFF102F4E) : const Color(0xFFE3F1FF), borderRadius: BorderRadius.circular(18)), child: Row(children: [const Icon(Icons.shield_rounded, color: Color(0xFF2588F5), size: 29), const SizedBox(width: 12), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Drive Safe', style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface)), Text('We are with you', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))])]))
+        HomeAction(icon: Icons.alt_route_rounded, title: 'Emergency Corridor', subtitle: 'Track ambulance, route, ETA and hospital', onTap: _openEmergencyCorridor),
       ]))),
     );
   }
