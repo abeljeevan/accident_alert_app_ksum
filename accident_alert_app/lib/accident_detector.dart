@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'log_store.dart';
 import 'contact_store.dart';
 import 'voice_ai_handler.dart';
+import 'hospital_service.dart';
+import 'osrm_routing_service.dart';
 
 const bool kSmsEnabled = true;
 
@@ -35,13 +37,55 @@ class _AccidentDetectorState extends State<AccidentDetector> {
     await _tts.speak(text);
   }
 
-  String _buildSmsBody(Position pos) {
+  Future<String> _buildSmsBody(Position pos) async {
     final maps = 'https://maps.google.com/?q=${pos.latitude},${pos.longitude}';
+    var hospitalInfo = 'Live hospital details are unavailable.';
+    var directions = '';
+    try {
+      final hospital = await HospitalService.getNearestHospital(
+        pos.latitude,
+        pos.longitude,
+      ).timeout(const Duration(seconds: 10));
+      if (hospital != null) {
+        final hospitalLat = hospital['lat'] as double;
+        final hospitalLon = hospital['lon'] as double;
+        final directKm = Geolocator.distanceBetween(
+          pos.latitude,
+          pos.longitude,
+          hospitalLat,
+          hospitalLon,
+        ) / 1000;
+        final route = await OSRMRoutingService.calculateRoute(
+          startLat: pos.latitude,
+          startLon: pos.longitude,
+          endLat: hospitalLat,
+          endLon: hospitalLon,
+          timeoutPerEndpoint: const Duration(seconds: 7),
+        );
+        final routeInfo = route == null
+            ? '~${(directKm * 1.4).toStringAsFixed(1)} km • ETA ~${((directKm * 1.4 / 30) * 60).ceil()} min (estimate)'
+            : '${OSRMRoutingService.formatDistance(route['distance'] as double)} • ETA ${OSRMRoutingService.formatDuration(route['duration'] as double)}';
+        hospitalInfo = '${hospital['name']}\n📏 Distance: ${directKm.toStringAsFixed(2)} km\n🚗 $routeInfo';
+        directions = '\n🗺️ Directions:\n${OSRMRoutingService.generateOSMRouteLink(startLat: pos.latitude, startLon: pos.longitude, endLat: hospitalLat, endLon: hospitalLon)}';
+      }
+    } catch (error) {
+      debugPrint('Hospital details could not be added to the alert: $error');
+    }
+    if (hospitalInfo == 'Live hospital details are unavailable.') {
+      final search = Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': 'hospitals near ${pos.latitude},${pos.longitude}',
+      });
+      hospitalInfo = 'Open to find the nearest hospital.';
+      directions = '\n🏥 Nearby hospitals:\n$search';
+    }
     return '''
 ⚠️ Accident detected!
 📅 ${_now()}
 📍 Lat: ${pos.latitude.toStringAsFixed(5)}, Lon: ${pos.longitude.toStringAsFixed(5)}
 ➡️ $maps
+🏥 Nearest Hospital:
+$hospitalInfo$directions
 Please send immediate assistance.
 ''';
   }
@@ -288,7 +332,7 @@ Please send immediate assistance.
     if (!await _ensureSmsPermission()) return;
 
     final contacts = EmergencyContactsStore.contacts;
-    final message = _buildSmsBody(pos);
+    final message = await _buildSmsBody(pos);
 
     try {
       for (var number in contacts) {

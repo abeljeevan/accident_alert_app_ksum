@@ -12,59 +12,144 @@ class HospitalService {
     'doctors': 30,
   };
 
-  /// Fetch nearby hospitals within 5km using Overpass API
+  static const _overpassEndpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+  ];
+
+  /// Use the fast, location-biased Photon search first, then Overpass mirrors.
   static Future<List<Map<String, dynamic>>> fetchNearbyHospitals(
-      double lat, double lng,
-      {int radius = 5000}) async {
-    try {
-      final url =
-          'https://overpass-api.de/api/interpreter?data=[out:json];'
-          '(node["amenity"="hospital"](around:$radius,$lat,$lng);'
-          'way["amenity"="hospital"](around:$radius,$lat,$lng);'
-          'relation["amenity"="hospital"](around:$radius,$lat,$lng););'
-          'out center;';
-
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'User-Agent': 'accident_alert_app/1.0'},
-      ).timeout(
-        const Duration(seconds: 5), // Add timeout to prevent hanging
-        onTimeout: () {
-          throw Exception('Hospital API request timed out');
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final elements = data['elements'] as List;
-
-        return elements.map<Map<String, dynamic>>((h) {
-          final double hospitalLat =
-              h['lat'] ?? h['center']?['lat']?.toDouble() ?? 0.0;
-          final double hospitalLon =
-              h['lon'] ?? h['center']?['lon']?.toDouble() ?? 0.0;
-          
-          // Extract hospital type/category
-          final tags = h['tags'] ?? {};
-          final type = tags['healthcare'] ?? tags['emergency'] ?? 'hospital';
-          final hasEmergency = tags['emergency'] == 'yes';
-
-          return {
-            "name": tags["name"] ?? "Unnamed Hospital",
-            "lat": hospitalLat,
-            "lon": hospitalLon,
-            "type": type,
-            "hasEmergency": hasEmergency,
-            "tags": tags,
-          };
-        }).toList();
-      } else {
-        throw Exception('Failed to fetch hospitals: HTTP ${response.statusCode}');
-      }
-    } catch (e) {
-      // Re-throw with more context
-      throw Exception('Failed to fetch hospitals: $e');
+    double lat,
+    double lng, {
+    int radius = 10000,
+  }) async {
+    if (!lat.isFinite || !lng.isFinite || lat.abs() > 90 || lng.abs() > 180) {
+      throw ArgumentError('The current location is not valid.');
     }
+
+    Object? lastError;
+    try {
+      final hospitals = await _fetchFromPhoton(lat, lng, radius)
+          .timeout(const Duration(seconds: 8));
+      if (hospitals.isNotEmpty) return hospitals;
+    } catch (error) {
+      lastError = error;
+    }
+
+    final query = '[out:json][timeout:8];'
+        '(nwr["amenity"="hospital"](around:$radius,$lat,$lng);'
+        'nwr["healthcare"="hospital"](around:$radius,$lat,$lng););'
+        'out center tags;';
+    for (final endpoint in _overpassEndpoints) {
+      try {
+        final response = await http.post(
+          Uri.parse(endpoint),
+          headers: const {
+            'User-Agent': 'accident_alert_app/1.0',
+            'Accept': 'application/json',
+          },
+          body: {'data': query},
+        ).timeout(const Duration(seconds: 10));
+        if (response.statusCode != 200) {
+          throw Exception('Hospital service returned HTTP ${response.statusCode}.');
+        }
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map || decoded['elements'] is! List) {
+          throw const FormatException('Hospital service returned invalid data.');
+        }
+        final hospitals = <Map<String, dynamic>>[];
+        final seen = <String>{};
+        for (final item in decoded['elements'] as List) {
+          if (item is! Map) continue;
+          final tags = item['tags'] is Map ? item['tags'] as Map : const {};
+          final coordinates = item['center'] is Map ? item['center'] as Map : item;
+          final hospitalLat = _number(coordinates['lat']);
+          final hospitalLon = _number(coordinates['lon']);
+          if (hospitalLat == null || hospitalLon == null) continue;
+          final name = (tags['name'] ?? tags['name:en'] ?? tags['official_name'])
+              ?.toString().trim();
+          final hospitalName = name == null || name.isEmpty ? 'Unnamed Hospital' : name;
+          final key = '${hospitalName.toLowerCase()}|${hospitalLat.toStringAsFixed(5)}|${hospitalLon.toStringAsFixed(5)}';
+          if (!seen.add(key)) continue;
+          final type = (tags['healthcare'] ?? tags['emergency'] ?? 'hospital').toString();
+          hospitals.add({
+            'name': hospitalName,
+            'lat': hospitalLat,
+            'lon': hospitalLon,
+            'type': type,
+            'hasEmergency': tags['emergency'] == 'yes' || tags['emergency'] == 'emergency_ward',
+            'tags': tags,
+          });
+        }
+        return hospitals;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw Exception('Nearby hospital information is temporarily unavailable. Check your internet connection and try again. ($lastError)');
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchFromPhoton(
+    double lat,
+    double lng,
+    int radius,
+  ) async {
+    final uri = Uri.https('photon.komoot.io', '/api/', {
+      'q': 'hospital',
+      'lat': '$lat',
+      'lon': '$lng',
+      'limit': '30',
+      'location_bias_scale': '0.2',
+      'osm_tag': ['amenity:hospital', 'healthcare:hospital'],
+    });
+    final response = await http.get(uri, headers: const {
+      'User-Agent': 'accident_alert_app/1.0',
+      'Accept': 'application/json',
+    }).timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200) {
+      throw Exception('Hospital search returned HTTP ${response.statusCode}.');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map || decoded['features'] is! List) {
+      throw const FormatException('Hospital search returned invalid data.');
+    }
+    final hospitals = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final feature in decoded['features'] as List) {
+      if (feature is! Map) continue;
+      final properties = feature['properties'] is Map ? feature['properties'] as Map : const {};
+      final geometry = feature['geometry'] is Map ? feature['geometry'] as Map : const {};
+      final coordinates = geometry['coordinates'];
+      if (coordinates is! List || coordinates.length < 2) continue;
+      final hospitalLon = _number(coordinates[0]);
+      final hospitalLat = _number(coordinates[1]);
+      if (hospitalLat == null || hospitalLon == null ||
+          Geolocator.distanceBetween(lat, lng, hospitalLat, hospitalLon) > radius) continue;
+      final name = (properties['name'] ?? properties['name:en'])?.toString().trim();
+      final hospitalName = name == null || name.isEmpty ? 'Unnamed Hospital' : name;
+      final key = '${hospitalName.toLowerCase()}|${hospitalLat.toStringAsFixed(5)}|${hospitalLon.toStringAsFixed(5)}';
+      if (!seen.add(key)) continue;
+      hospitals.add({
+        'name': hospitalName,
+        'lat': hospitalLat,
+        'lon': hospitalLon,
+        'type': (properties['osm_value'] ?? 'hospital').toString(),
+        'hasEmergency': false,
+        'tags': properties,
+      });
+    }
+    hospitals.sort((a, b) => Geolocator.distanceBetween(
+      lat, lng, a['lat'] as double, a['lon'] as double,
+    ).compareTo(Geolocator.distanceBetween(
+      lat, lng, b['lat'] as double, b['lon'] as double,
+    )));
+    return hospitals;
+  }
+
+  static double? _number(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
   }
 
   /// Get nearest hospital (simple distance-based)

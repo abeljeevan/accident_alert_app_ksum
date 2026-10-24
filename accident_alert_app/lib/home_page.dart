@@ -362,15 +362,40 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _trackSpeed() async {
+    try {
+      await _getCurrentPosition();
+    } catch (e) {
+      debugPrint('Location is not ready yet: $e');
+    }
     while (mounted) {
       try {
-        final pos = await Geolocator.getCurrentPosition();
+        final pos = await _getCurrentPosition();
         _lastSpeed = pos.speed * 3.6; // Convert m/s to km/h
       } catch (e) {
-        // Ignore errors
+        debugPrint('Location update failed: $e');
       }
       await Future.delayed(const Duration(seconds: 2));
     }
+  }
+
+  Future<Position> _getCurrentPosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw Exception('Location services are turned off. Enable GPS and retry.');
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception('Location permission is required to find nearby hospitals.');
+    }
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
   }
 
   String _now() {
@@ -386,12 +411,24 @@ class _HomePageState extends State<HomePage> {
   }) async {
     final maps = 'https://maps.google.com/?q=${pos.latitude},${pos.longitude}';
 
-    String hospitalInfo = "No nearby hospital found.";
+    String hospitalInfo = "No nearby hospital name is available.";
     if (hospitalName != null && hospitalDistance != null) {
       hospitalInfo = "$hospitalName\n📏 Distance: ${hospitalDistance.toStringAsFixed(2)} km";
       if (routeInfo != null) {
         hospitalInfo += "\n🚗 $routeInfo";
       }
+    }
+
+    if (hospitalName == null || hospitalDistance == null) {
+      final searchUrl = Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': 'hospitals near ${pos.latitude},${pos.longitude}',
+      });
+      hospitalInfo += '\nFind nearby hospitals: $searchUrl';
+    } else if (routeInfo == null) {
+      final estimatedRoadKm = hospitalDistance * 1.4;
+      final estimatedMinutes = ((estimatedRoadKm / 30) * 60).ceil();
+      hospitalInfo += '\n🚗 ~${estimatedRoadKm.toStringAsFixed(1)} km • ETA ~$estimatedMinutes min (estimate)';
     }
 
     String routingSection = '';
@@ -422,9 +459,7 @@ $hospitalInfo$routingSection
 
   Future<void> _sendAlertWithLocation(BuildContext context) async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      final pos = await _getCurrentPosition();
 
       if (!await _ensureSmsPermission()) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -470,12 +505,18 @@ $hospitalInfo$routingSection
           lat: pos.latitude,
           lng: pos.longitude,
           severity: 'Moderate', // Default severity for manual alerts
-        );
+        ).timeout(const Duration(seconds: 10));
 
         if (hospital != null) {
           hospitalName = hospital['name'];
           hospitalLat = hospital['lat'];
           hospitalLon = hospital['lon'];
+          osmRouteLink = OSRMRoutingService.generateOSMRouteLink(
+            startLat: pos.latitude,
+            startLon: pos.longitude,
+            endLat: hospitalLat!,
+            endLon: hospitalLon!,
+          );
           
           final distanceMeters = Geolocator.distanceBetween(
             pos.latitude,
@@ -492,6 +533,7 @@ $hospitalInfo$routingSection
               startLon: pos.longitude,
               endLat: hospitalLat!,
               endLon: hospitalLon!,
+              timeoutPerEndpoint: const Duration(seconds: 7),
             );
             
             if (route != null) {
@@ -605,9 +647,7 @@ Sent to: ${contacts.join(', ')}
     double impactForce,
   ) async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      final pos = await _getCurrentPosition();
 
       // Get address from coordinates
       String address = 'Address unavailable';
@@ -649,7 +689,7 @@ Sent to: ${contacts.join(', ')}
           lat: pos.latitude,
           lng: pos.longitude,
           severity: severity,
-        );
+        ).timeout(const Duration(seconds: 10));
 
         if (hospital != null) {
           hospitalName = hospital['name'];
@@ -671,6 +711,7 @@ Sent to: ${contacts.join(', ')}
               startLon: pos.longitude,
               endLat: hospitalLat!,
               endLon: hospitalLon!,
+              timeoutPerEndpoint: const Duration(seconds: 7),
             );
             
             if (route != null) {
@@ -1055,21 +1096,18 @@ Sent to: ${contacts.join(', ')}
   }
 
   void _showNearbyHospitalsPage() {
-    _showScreen('Nearby Hospitals', NearbyHospitalsView(isDarkMode: widget.isDarkMode, onNavigate: (name) async {
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      final hospitals = await HospitalService.fetchNearbyHospitals(pos.latitude, pos.longitude);
-      final hospital = hospitals.firstWhere((h) => h['name'] == name, orElse: () => <String, dynamic>{});
-      if (hospital.isEmpty) return;
-      final lat = double.parse(hospital['lat'].toString());
-      final lon = double.parse(hospital['lon'].toString());
+    _showScreen('Nearby Hospitals', NearbyHospitalsView(isDarkMode: widget.isDarkMode, onNavigate: (name, lat, lon) async {
+      final pos = await _getCurrentPosition();
       final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
       final address = placemarks.isEmpty ? '${pos.latitude}, ${pos.longitude}' : '${placemarks.first.locality ?? ''}, ${placemarks.first.country ?? ''}';
       if (!mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => AccidentMapPage(accidentLat: pos.latitude, accidentLon: pos.longitude, hospitalName: name, hospitalLat: lat, hospitalLon: lon, address: address, severity: 'Minor', isDarkMode: widget.isDarkMode)));
     }, onLoad: () async {
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final pos = await _getCurrentPosition();
       final hospitals = await HospitalService.fetchNearbyHospitals(pos.latitude, pos.longitude);
-      return hospitals.map<(String, double)>((h) => (h['name'] ?? 'Unknown', Geolocator.distanceBetween(pos.latitude, pos.longitude, double.parse(h['lat'].toString()), double.parse(h['lon'].toString())) / 1000)).toList();
+      final nearby = hospitals.map((h) => Map<String, dynamic>.from(h)).toList()
+        ..sort((a, b) => Geolocator.distanceBetween(pos.latitude, pos.longitude, a['lat'] as double, a['lon'] as double).compareTo(Geolocator.distanceBetween(pos.latitude, pos.longitude, b['lat'] as double, b['lon'] as double)));
+      return nearby.map<(String, double, double, double)>((h) => (h['name'] ?? 'Unknown', Geolocator.distanceBetween(pos.latitude, pos.longitude, h['lat'] as double, h['lon'] as double) / 1000, h['lat'] as double, h['lon'] as double)).toList();
     }));
   }
 

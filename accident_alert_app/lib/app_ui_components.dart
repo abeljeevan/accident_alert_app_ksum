@@ -6,15 +6,15 @@ const appBlue = Color(0xFF2588F5);
 class NearbyHospitalsView extends StatefulWidget {
   const NearbyHospitalsView({super.key, required this.isDarkMode, required this.onLoad, this.onNavigate});
   final bool isDarkMode;
-  final Future<List<(String, double)>> Function() onLoad;
-  final Future<void> Function(String name)? onNavigate;
+  final Future<List<(String, double, double, double)>> Function() onLoad;
+  final Future<void> Function(String name, double latitude, double longitude)? onNavigate;
   @override
   State<NearbyHospitalsView> createState() => _NearbyHospitalsViewState();
 }
 
 class _NearbyHospitalsViewState extends State<NearbyHospitalsView> {
   final _search = TextEditingController();
-  late Future<List<(String, double)>> _future;
+  late Future<List<(String, double, double, double)>> _future;
   @override
   void initState() { super.initState(); _future = widget.onLoad(); }
   @override
@@ -22,15 +22,15 @@ class _NearbyHospitalsViewState extends State<NearbyHospitalsView> {
   @override
   Widget build(BuildContext context) => Column(children: [
     Padding(padding: const EdgeInsets.fromLTRB(18, 10, 18, 12), child: TextField(controller: _search, onChanged: (_) => setState(() {}), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search nearby hospitals...'))),
-    Expanded(child: FutureBuilder<List<(String, double)>>(future: _future, builder: (context, snapshot) {
+    Expanded(child: FutureBuilder<List<(String, double, double, double)>>(future: _future, builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-      if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.location_off_rounded, size: 46), const SizedBox(height: 12), const Text('Could not load nearby hospitals.'), const SizedBox(height: 12), FilledButton.icon(onPressed: () => setState(() => _future = widget.onLoad()), icon: const Icon(Icons.refresh), label: const Text('Try again'))])));
-      final all = snapshot.data ?? const <(String, double)>[];
+      if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.location_off_rounded, size: 46), const SizedBox(height: 12), const Text('Could not load nearby hospitals.', textAlign: TextAlign.center), const SizedBox(height: 8), Text('Allow location access and check your internet connection, then try again.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall), const SizedBox(height: 12), FilledButton.icon(onPressed: () => setState(() => _future = widget.onLoad()), icon: const Icon(Icons.refresh), label: const Text('Try again'))])));
+      final all = snapshot.data ?? const <(String, double, double, double)>[];
       final results = all.where((h) => h.$1.toLowerCase().contains(_search.text.trim().toLowerCase())).toList();
       if (results.isEmpty) return Center(child: Text(all.isEmpty ? 'No hospitals found nearby.' : 'No matching hospitals.'));
       return ListView.separated(padding: const EdgeInsets.fromLTRB(18, 0, 18, 18), itemCount: results.length, separatorBuilder: (_, __) => const SizedBox(height: 9), itemBuilder: (context, index) {
         final hospital = results[index];
-        return Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9), child: Row(children: [Container(width: 39, height: 39, decoration: BoxDecoration(color: appRed.withValues(alpha: .1), shape: BoxShape.circle), child: const Icon(Icons.local_hospital_rounded, color: appRed)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(hospital.$1, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text('${hospital.$2.toStringAsFixed(1)} km away', style: Theme.of(context).textTheme.bodySmall)])), const SizedBox(width: 8), FilledButton(onPressed: widget.onNavigate == null ? null : () => widget.onNavigate!(hospital.$1), style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11)), child: const Text('Navigate'))])));
+        return Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9), child: Row(children: [Container(width: 39, height: 39, decoration: BoxDecoration(color: appRed.withValues(alpha: .1), shape: BoxShape.circle), child: const Icon(Icons.local_hospital_rounded, color: appRed)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(hospital.$1, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text('${hospital.$2.toStringAsFixed(1)} km away', style: Theme.of(context).textTheme.bodySmall)])), const SizedBox(width: 8), FilledButton(onPressed: widget.onNavigate == null ? null : () => widget.onNavigate!(hospital.$1, hospital.$3, hospital.$4), style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11)), child: const Text('Navigate'))])));
       });
     }))
   ]);

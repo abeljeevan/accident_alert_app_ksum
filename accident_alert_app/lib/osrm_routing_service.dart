@@ -1,95 +1,104 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-/// OSRM (Open Source Routing Machine) service for route calculation
+/// OSRM routing with a fallback provider for availability issues.
 class OSRMRoutingService {
-  /// Calculate route between two points using OSRM
+  static const _routeEndpoints = [
+    'https://router.project-osrm.org',
+    'https://routing.openstreetmap.de/routed-car',
+  ];
+
   static Future<Map<String, dynamic>?> calculateRoute({
     required double startLat,
     required double startLon,
     required double endLat,
     required double endLon,
+    Duration timeoutPerEndpoint = const Duration(seconds: 18),
   }) async {
-    try {
-      // OSRM demo server - free but rate-limited
-      // For production, consider hosting your own OSRM instance
-      final url = 'https://router.project-osrm.org/route/v1/driving/'
-          '$startLon,$startLat;$endLon,$endLat'
-          '?overview=full&geometries=geojson';
-
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'User-Agent': 'accident_alert_app/1.0'},
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('OSRM routing request timed out');
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        
-        if (data['code'] == 'Ok' && data['routes'] != null && data['routes'].isNotEmpty) {
-          final route = data['routes'][0];
-          final geometry = route['geometry']['coordinates'] as List;
-          
-          // Convert coordinates to LatLng format
-          final routePoints = geometry.map<LatLng>((coord) {
-            return LatLng(coord[1].toDouble(), coord[0].toDouble());
-          }).toList();
-
-          return {
-            'distance': route['distance'] / 1000, // Convert to km
-            'duration': route['duration'] / 60, // Convert to minutes
-            'routePoints': routePoints,
-            'geometry': geometry,
-          };
-        } else {
-          throw Exception('No route found');
-        }
-      } else {
-        throw Exception('OSRM server error: HTTP ${response.statusCode}');
-      }
-    } catch (e) {
-      print('⚠️ OSRM routing failed: $e');
+    if (![startLat, startLon, endLat, endLon].every((v) => v.isFinite) ||
+        startLat.abs() > 90 ||
+        endLat.abs() > 90 ||
+        startLon.abs() > 180 ||
+        endLon.abs() > 180) {
       return null;
     }
+
+    for (final endpoint in _routeEndpoints) {
+      try {
+        final uri =
+            Uri.parse(
+              '$endpoint/route/v1/driving/$startLon,$startLat;$endLon,$endLat',
+            ).replace(
+              queryParameters: const {
+                'overview': 'full',
+                'geometries': 'geojson',
+                'steps': 'false',
+              },
+            );
+        final response = await http
+            .get(
+              uri,
+              headers: const {
+                'User-Agent': 'accident_alert_app/1.0',
+                'Accept': 'application/json',
+              },
+            )
+            .timeout(timeoutPerEndpoint);
+        if (response.statusCode != 200) continue;
+
+        final data = jsonDecode(response.body);
+        if (data is! Map ||
+            data['code'] != 'Ok' ||
+            data['routes'] is! List ||
+            (data['routes'] as List).isEmpty)
+          continue;
+        final route = (data['routes'] as List).first;
+        final coordinates = route['geometry']?['coordinates'];
+        if (coordinates is! List || coordinates.isEmpty) continue;
+        final routePoints = coordinates
+            .map<LatLng>(
+              (coordinate) => LatLng(
+                (coordinate[1] as num).toDouble(),
+                (coordinate[0] as num).toDouble(),
+              ),
+            )
+            .toList();
+        return {
+          'distance': (route['distance'] as num).toDouble() / 1000,
+          'duration': (route['duration'] as num).toDouble() / 60,
+          'routePoints': routePoints,
+          'geometry': coordinates,
+        };
+      } catch (error) {
+        print('OSRM endpoint failed ($endpoint): $error');
+      }
+    }
+    return null;
   }
 
-  /// Generate OpenStreetMap routing link
   static String generateOSMRouteLink({
     required double startLat,
     required double startLon,
     required double endLat,
     required double endLon,
   }) {
-    // OpenStreetMap routing link
-    return 'https://www.openstreetmap.org/directions?'
-        'engine=fossgis_osrm_car&'
-        'route=$startLat%2C$startLon%3B$endLat%2C$endLon';
+    final uri = Uri.https('www.openstreetmap.org', '/directions', {
+      'engine': 'fossgis_osrm_car',
+      'route': '$startLat,$startLon;$endLat,$endLon',
+    });
+    return uri.toString();
   }
 
-  /// Format duration for display
   static String formatDuration(double minutes) {
-    if (minutes < 1) {
-      return '< 1 min';
-    } else if (minutes < 60) {
-      return '${minutes.round()} min';
-    } else {
-      final hours = minutes ~/ 60;
-      final mins = (minutes % 60).round();
-      return '$hours hr ${mins} min';
-    }
+    if (minutes < 1) return '< 1 min';
+    if (minutes < 60) return '${minutes.round()} min';
+    final hours = minutes ~/ 60;
+    final mins = (minutes % 60).round();
+    return '$hours hr $mins min';
   }
 
-  /// Format distance for display
-  static String formatDistance(double km) {
-    if (km < 1) {
-      return '${(km * 1000).round()} m';
-    } else {
-      return '${km.toStringAsFixed(1)} km';
-    }
-  }
+  static String formatDistance(double km) =>
+      km < 1 ? '${(km * 1000).round()} m' : '${km.toStringAsFixed(1)} km';
 }
