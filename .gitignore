@@ -10,3 +10,4 @@ Thumbs.db
 /.gradle-transforms-cache/
 .dart_tool/
 .dart-user-profile/
+.dart-appdata/
